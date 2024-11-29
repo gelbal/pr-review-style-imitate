@@ -1,0 +1,8 @@
+.DS_Store
+src/queries.sql
+data/
+.env
+.ipynb_checkpoints/pyproject-checkpoint.toml
+*.pyc
+*.private-key.pem
+*-working-copy*
