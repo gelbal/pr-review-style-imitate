@@ -53,41 +53,37 @@ def get_diff_size(diff_content: str) -> int:
         return 0
     return len([line for line in diff_content.split('\n') if line.startswith('+') or line.startswith('-')])
 
-def initialize_git_repo(repo_name: str, repo_url: str) -> str:
-    """Initialize git repository once for all operations"""
+def update_git_repo(repo_name: str, repo_url: str) -> str:
+    """Update existing git repository with latest changes"""
     work_dir = get_work_dir(repo_name)
-    os.makedirs(work_dir, exist_ok=True)
 
-    print(f"Initializing repository in: {work_dir}")
+    print(f"Updating repository in: {work_dir}")
 
-    # Clean start - remove existing .git directory
-    git_dir = os.path.join(work_dir, '.git')
-    if os.path.exists(git_dir):
-        print(f"Removing existing git directory: {git_dir}")
-        run_shell_command(['rm', '-rf', git_dir], work_dir)
+    # If repo doesn't exist, clone it first
+    if not os.path.exists(os.path.join(work_dir, '.git')):
+        print("Repository not found. Performing initial clone...")
+        os.makedirs(work_dir, exist_ok=True)
+        clone_result = run_shell_command(['git', 'clone', repo_url, '.'], work_dir)
+        if not clone_result and not os.path.exists(os.path.join(work_dir, '.git')):
+            raise Exception("Failed to clone repository")
 
-    # Initialize new repository
-    init_result = run_shell_command(['git', 'init'], work_dir)
-    if not init_result:
-        raise Exception("Failed to initialize git repository")
+    # Update existing repo
+    print("Fetching latest changes...")
 
-    # Configure remote - git remote add doesn't return output on success
-    remote_result = run_shell_command(['git', 'remote', 'add', 'origin', repo_url], work_dir)
-    # We only need to check if the command didn't fail (it returns None on success)
+    # First checkout master to ensure we're on the right branch
+    checkout_result = run_shell_command(['git', 'checkout', 'master'], work_dir)
+    if not checkout_result:
+        raise Exception("Failed to checkout master branch")
 
-    # Verify remote was added correctly
-    verify_remote = run_shell_command(['git', 'remote', '-v'], work_dir)
-    if not verify_remote or 'origin' not in verify_remote:
-        raise Exception("Failed to add remote - verification failed")
-
-    # Initial fetch of master branch - doesn't return output on success
-    print("Performing initial fetch...")
+    # Then fetch latest changes
     fetch_result = run_shell_command(['git', 'fetch', 'origin', 'master'], work_dir)
+    if fetch_result is None:  # None indicates command failed
+        raise Exception("Failed to fetch latest changes")
 
-    # Verify fetch worked by checking if we can see the master branch
-    verify_fetch = run_shell_command(['git', 'branch', '-r'], work_dir)
-    if not verify_fetch or 'origin/master' not in verify_fetch:
-        raise Exception("Failed to fetch master branch - verification failed")
+    # Reset to match origin/master
+    reset_result = run_shell_command(['git', 'reset', '--hard', 'origin/master'], work_dir)
+    if not reset_result:
+        raise Exception("Failed to reset to origin/master")
 
     return work_dir
 
@@ -318,11 +314,11 @@ def process_prs(repo_name: str, batch_size: int = 100, force_update: bool = Fals
     print(f"Found {len(skipped_prs)} PRs to skip")
     print(f"Total PRs in system: {len(pr_lookup)}")
 
-    # Initialize git repo only if we have diffs to process
+    # Initialize/update git repo only if we have diffs to process
     work_dir = None
     if valid_prs:
         repo_url = '/'.join(valid_prs[0]['html_url'].split('/')[:5])
-        work_dir = initialize_git_repo(repo_name, repo_url)
+        work_dir = update_git_repo(repo_name, repo_url)
 
     # Process diffs for valid PRs in batches
     current_batch = []
@@ -396,16 +392,8 @@ def process_prs(repo_name: str, batch_size: int = 100, force_update: bool = Fals
         print(f"Success rate: {(successful/processed)*100:.1f}%")
     print(f"Total PRs in system: {len(pr_lookup)}")
 
-def cleanup_workspace(repo_name: str):
-    """Clean up the git workspace before processing"""
-    work_dir = get_work_dir(repo_name)
-    if os.path.exists(work_dir):
-        print(f"Cleaning up workspace: {work_dir}")
-        run_shell_command(['rm', '-rf', '.git'], work_dir)
-
 if __name__ == "__main__":
     #repo_name = "looker"
     repo_name = "nosara"
-    cleanup_workspace(repo_name)
     #process_prs(repo_name, force_update=True)
     process_prs(repo_name, force_update=False)

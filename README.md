@@ -45,6 +45,10 @@ The tool follows a four-stage pipeline as shown in the diagram:
    - `ANTHROPIC_API_KEY`: For Claude 3.5
 3. Install dependencies: `poetry install`
 4. Set up Ollama locally with the Qwen 2.5 model
+5. For `fetch_pr_diffs.py`:
+   - First clone the target repository manually: `git clone <repo-url> data/temp_git_workspace/<repo-name>`
+   - The script will then use this local copy and only fetch incremental updates
+   - This approach is more resilient to network issues and faster for large repositories
 
 `fetch_pr_diffs.py` requires access to the GitHub repository. This script fetches the git repository to retrieve PR diffs based on the provided PR metadata in `data/input/`.
 
